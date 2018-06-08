@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+
+set -eu
+
+if [ "$#" -ne 2 ]; then
+  echo "$0 <profile-with-mfa-serial> <role-arn>"
+  exit 1
+fi
+
+duration_seconds=28800
+
+source_profile="$1"
+role_arn="$2"
+
+cache_directory="${HOME}/.aws/cli/cache"
+
+function iso_to_epoch() {
+  if [[ "${OSTYPE}" == linux* ]]; then
+    date -d "$1" "+%s"
+  elif [[ "${OSTYPE}" == darwin* ]]; then
+    date -ujf "%Y-%m-%dT%H:%M:%SZ" "$1" +"%s"
+  else
+    echo "OS not supported."
+    exit 1
+  fi
+}
+
+function request_mfa_code() {
+  if [[ "${OSTYPE}" == linux* ]]; then
+    zenity --entry --title "Enter MFA code" --text "Enter MFA code for '"${1}"':" --entry-text ""
+  elif [[ "${OSTYPE}" == darwin* ]]; then
+    osascript -e 'Tell application "System Events" to display dialog "Enter MFA code for '"${1}"':" default answer ""' -e 'text returned of result' 2>/dev/null
+  else
+    echo "OS not supported."
+    exit 1
+  fi
+}
+
+function cached_credentials() {
+  cache_file="${cache_directory}/$1"
+  if [ -f "${cache_file}" ]; then
+    cached_token=$(cat "${cache_file}")
+    expiration=$(echo "${cached_token}" | jq -r '.Credentials.Expiration')
+    expiration_seconds=$(iso_to_epoch "${expiration}")
+    now_seconds=$(date +%s)
+    if (( (now_seconds + 1800) < expiration_seconds )); then
+      echo "${cached_token}"
+    fi
+  fi
+}
+
+function cache_credentials() {
+  cache_file="${cache_directory}/$1"
+  mkdir -p "${cache_directory}"
+  echo "$2" > "${cache_file}"
+}
+
+# Replace ':' with '_' and '/' with '-'
+escaped_role_arn=${role_arn//:/_}
+escaped_role_arn=${escaped_role_arn//\//-}
+assumed_session=$(cached_credentials "target-profile-${escaped_role_arn}")
+
+if [ -z "${assumed_session}" ]; then
+  source_session_token=$(cached_credentials "source-profile-${source_profile}")
+  if [ -z "${source_session_token}" ]; then
+    mfa_serial=$(aws configure get mfa_serial --profile "${source_profile}")
+    token_code="$(request_mfa_code ${mfa_serial})"
+    source_session_token=$(aws sts get-session-token --profile "${source_profile}" --token-code "${token_code}" --serial-number "${mfa_serial}" --duration-seconds "${duration_seconds}")
+
+    cache_credentials "source-profile-${source_profile}" "${source_session_token}"
+  fi
+
+  access_key=$(echo "${source_session_token}" | jq -r '.Credentials.AccessKeyId')
+  secret_key=$(echo "${source_session_token}" | jq -r '.Credentials.SecretAccessKey')
+  session_token=$(echo "${source_session_token}" | jq -r '.Credentials.SessionToken')
+
+  assumed_session=$(AWS_ACCESS_KEY_ID="${access_key}" AWS_SECRET_ACCESS_KEY="${secret_key}" AWS_SESSION_TOKEN="${session_token}" aws sts assume-role --role-arn "${role_arn}" --role-session-name "aws-long-assume-$(date +%s)")
+  cache_credentials "target-profile-${escaped_role_arn}" "${assumed_session}"
+fi
+
+echo "${assumed_session}" | jq -M '.Credentials + {Version: 1}'
