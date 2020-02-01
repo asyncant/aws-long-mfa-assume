@@ -58,6 +58,18 @@ function cache_credentials() {
 # Replace ':' with '_' and '/' with '-'
 escaped_role_arn=${role_arn//:/_}
 escaped_role_arn=${escaped_role_arn//\//-}
+
+# macOS doesn't have flock by default, emulate the needed parts.
+temp_lock_file=$(mktemp "${cache_directory}/temp-lock.XXXX")
+lock_file="${cache_directory}/${escaped_role_arn}.lock"
+# ln will error if lock file already exists.
+if ln "${temp_lock_file}" "${lock_file}" 2>/dev/null; then
+  trap 'rm "${lock_file}"; rm "${temp_lock_file}"' EXIT
+else
+  rm "${temp_lock_file}"
+  while [ -f "${lock_file}" ]; do sleep 5; done
+fi
+
 assumed_session=$(cached_credentials "target-profile-${escaped_role_arn}")
 
 if [ -z "${assumed_session}" ]; then
@@ -79,3 +91,4 @@ if [ -z "${assumed_session}" ]; then
 fi
 
 echo "${assumed_session}" | jq -M '.Credentials + {Version: 1}'
+
