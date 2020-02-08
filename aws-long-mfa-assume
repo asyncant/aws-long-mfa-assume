@@ -13,6 +13,7 @@ source_profile="$1"
 role_arn="$2"
 
 cache_directory="${HOME}/.aws/cli/cache"
+mkdir -p "${cache_directory}"
 
 function iso_to_epoch() {
   if [[ "${OSTYPE}" == linux* ]]; then
