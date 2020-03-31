@@ -78,7 +78,7 @@ if [ -z "${assumed_session}" ]; then
   if [ -z "${source_session_token}" ]; then
     mfa_serial=$(aws configure get mfa_serial --profile "${source_profile}")
     token_code="$(request_mfa_code ${mfa_serial})"
-    source_session_token=$(aws sts get-session-token --profile "${source_profile}" --token-code "${token_code}" --serial-number "${mfa_serial}" --duration-seconds "${duration_seconds}")
+    source_session_token=$(aws sts get-session-token --profile "${source_profile}" --token-code "${token_code}" --serial-number "${mfa_serial}" --duration-seconds "${duration_seconds}" --output json)
 
     cache_credentials "source-profile-${source_profile}" "${source_session_token}"
   fi
@@ -87,7 +87,7 @@ if [ -z "${assumed_session}" ]; then
   secret_key=$(echo "${source_session_token}" | jq -r '.Credentials.SecretAccessKey')
   session_token=$(echo "${source_session_token}" | jq -r '.Credentials.SessionToken')
 
-  assumed_session=$(AWS_ACCESS_KEY_ID="${access_key}" AWS_SECRET_ACCESS_KEY="${secret_key}" AWS_SESSION_TOKEN="${session_token}" aws sts assume-role --role-arn "${role_arn}" --role-session-name "aws-long-assume-$(date +%s)")
+  assumed_session=$(AWS_ACCESS_KEY_ID="${access_key}" AWS_SECRET_ACCESS_KEY="${secret_key}" AWS_SESSION_TOKEN="${session_token}" aws sts assume-role --role-arn "${role_arn}" --role-session-name "aws-long-assume-$(date +%s)" --output json)
   cache_credentials "target-profile-${escaped_role_arn}" "${assumed_session}"
 fi
 
