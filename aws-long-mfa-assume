@@ -79,6 +79,8 @@ if [ -z "${assumed_session}" ]; then
     mfa_serial=$(aws configure get mfa_serial --profile "${source_profile}")
     token_code="$(request_mfa_code ${mfa_serial})"
     source_session_token=$(aws sts get-session-token --profile "${source_profile}" --token-code "${token_code}" --serial-number "${mfa_serial}" --duration-seconds "${duration_seconds}" --output json)
+    # AWS CLI v2 uses +00:00 instead of Z.
+    source_session_token=${source_session_token/+00:00/Z}
 
     cache_credentials "source-profile-${source_profile}" "${source_session_token}"
   fi
