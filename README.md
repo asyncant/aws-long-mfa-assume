@@ -10,10 +10,18 @@ token from AWS and assumes the configured role with that session token. The 8-ho
 
 # Installation
 
+## macOS
+```
+brew install asyncant/tap/aws-long-mfa-assume
+```
+(or see *Manual installation*)
+
+## Linux / Manual installation
+
 1. Clone repository
 1. Put `aws-long-mfa-assume` in your `$PATH`, e.g. by symlinking it in a directory that's in your `$PATH`
 
-## Prerequisites
+### Prerequisites
 
 - MacOS:
   - [jq](https://stedolan.github.io/jq/), used to process json response from `aws-cli`  ( `brew install jq` )
