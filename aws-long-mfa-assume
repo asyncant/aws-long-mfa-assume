@@ -65,7 +65,7 @@ temp_lock_file=$(mktemp "${cache_directory}/temp-lock.XXXX")
 lock_file="${cache_directory}/${escaped_role_arn}.lock"
 # ln will error if lock file already exists.
 if ln "${temp_lock_file}" "${lock_file}" 2>/dev/null; then
-  trap 'rm "${lock_file}"; rm "${temp_lock_file}"' EXIT
+  trap 'rm "${lock_file}"; rm "${temp_lock_file}"; [[ -z "$(jobs -p)" ]] || kill $(jobs -p)' EXIT
 else
   rm "${temp_lock_file}"
   while [ -f "${lock_file}" ]; do sleep 5; done
