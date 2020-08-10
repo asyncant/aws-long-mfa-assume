@@ -30,7 +30,7 @@ function request_mfa_code() {
   if [[ "${OSTYPE}" == linux* ]]; then
     zenity --entry --title "Enter MFA code" --text "Enter MFA code for '"${1}"':" --entry-text ""
   elif [[ "${OSTYPE}" == darwin* ]]; then
-    osascript -e 'Tell application "System Events" to display dialog "Enter MFA code for '"${1}"':" default answer ""' -e 'text returned of result' 2>/dev/null
+    osascript -e 'text returned of (display dialog "Enter MFA code for '"${1}"':" with title "Enter MFA code" default answer "")' 2>/dev/null
   else
     echo "OS not supported."
     exit 1
