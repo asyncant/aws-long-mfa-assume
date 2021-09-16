@@ -28,7 +28,7 @@ function iso_to_epoch() {
 
 function request_mfa_code() {
   if [[ "${OSTYPE}" == linux* ]]; then
-    zenity --entry --title "Enter MFA code" --text "Enter MFA code for '"${1}"':" --entry-text ""
+    zenity --entry --title "Enter MFA code" --text "Enter MFA code for '""${1}""':" --entry-text ""
   elif [[ "${OSTYPE}" == darwin* ]]; then
     osascript -e 'text returned of (display dialog "Enter MFA code for '"${1}"':" with title "Enter MFA code" default answer "")' 2>/dev/null
   else
@@ -60,16 +60,20 @@ function cache_credentials() {
 escaped_role_arn=${role_arn//:/_}
 escaped_role_arn=${escaped_role_arn//\//-}
 
-# macOS doesn't have flock by default, emulate the needed parts.
-temp_lock_file=$(mktemp "${cache_directory}/temp-lock.XXXX")
 lock_file="${cache_directory}/${escaped_role_arn}.lock"
-# ln will error if lock file already exists.
-if ln "${temp_lock_file}" "${lock_file}" 2>/dev/null; then
-  trap 'rm "${lock_file}"; rm "${temp_lock_file}"; [[ -z "$(jobs -p)" ]] || kill $(jobs -p)' EXIT
+if [[ "${OSTYPE}" == linux* ]]; then
+  exec 123>"${lock_file}"
+  flock 123
+elif [[ "${OSTYPE}" == darwin* ]]; then
+  while ! shlock -f "${lock_file}" -p $$; do
+    # >&2 echo "aws-long-mfa-assume lock for '${lock_file}' already held by process $(cat ${lock_file})"
+    sleep 5;
+  done
 else
-  rm "${temp_lock_file}"
-  while [ -f "${lock_file}" ]; do sleep 5; done
+  echo "OS not supported."
+  exit 1
 fi
+trap 'rm -f "${lock_file}"; [[ -z "$(jobs -p)" ]] || kill $(jobs -p)' EXIT
 
 assumed_session=$(cached_credentials "target-profile-${escaped_role_arn}")
 
@@ -77,7 +81,7 @@ if [ -z "${assumed_session}" ]; then
   source_session_token=$(cached_credentials "source-profile-${source_profile}")
   if [ -z "${source_session_token}" ]; then
     mfa_serial=$(aws configure get mfa_serial --profile "${source_profile}")
-    token_code="$(request_mfa_code ${mfa_serial})"
+    token_code="$(request_mfa_code "${mfa_serial}")"
     source_session_token=$(aws sts get-session-token --profile "${source_profile}" --token-code "${token_code}" --serial-number "${mfa_serial}" --duration-seconds "${duration_seconds}" --output json)
     # AWS CLI v2 uses +00:00 instead of Z.
     source_session_token=${source_session_token/+00:00/Z}
