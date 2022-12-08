@@ -93,7 +93,11 @@ if [ -z "${assumed_session}" ]; then
   secret_key=$(echo "${source_session_token}" | jq -r '.Credentials.SecretAccessKey')
   session_token=$(echo "${source_session_token}" | jq -r '.Credentials.SessionToken')
 
-  assumed_session=$(AWS_ACCESS_KEY_ID="${access_key}" AWS_SECRET_ACCESS_KEY="${secret_key}" AWS_SESSION_TOKEN="${session_token}" aws sts assume-role --role-arn "${role_arn}" --role-session-name "aws-long-assume-$(date +%s)" --output json)
+  role_session_name=$(aws configure get role_session_name --profile "${source_profile}" || :)
+  if [ -z "${role_session_name}" ]; then
+      role_session_name="aws-long-assume-$(date +%s)"
+  fi
+  assumed_session=$(AWS_ACCESS_KEY_ID="${access_key}" AWS_SECRET_ACCESS_KEY="${secret_key}" AWS_SESSION_TOKEN="${session_token}" aws sts assume-role --role-arn "${role_arn}" --role-session-name "${role_session_name}" --output json)
   # AWS CLI v2 uses +00:00 instead of Z.
   assumed_session=${assumed_session/+00:00/Z}
 
